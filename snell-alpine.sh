@@ -1,6 +1,6 @@
 #!/bin/sh
 # ================================================================
-# 作者：myouhi
+# 作者：hsiangyu
 # 仓库：https://github.com/hsiangyu/Snell
 # 描述: 此脚本用于在 Alpine Linux 系统上安装和管理 Snell 代理服务。
 # ================================================================
@@ -128,7 +128,7 @@ get_snell_version() {
 get_snell_download_url() {
     local arch=$(uname -m)
     if [ "${arch}" = "x86_64" ] || [ "${arch}" = "amd64" ]; then
-        echo "https://github.com/hsiangyu/Snell/releases/download/v3/alpine-snell-server-v3.0.0-linux-amd64.zip"
+        echo "https://github.com/jyucoeng/Snell/releases/download/v3/alpine-snell-server-v3.0.0-linux-amd64.zip"
     else
         echo -e "${RED}错误: 此 Snell 脚本仅支持 amd64/x86_64 架构。${RESET}"
         exit 1
@@ -195,7 +195,7 @@ open_port() {
 # 这个命令本质上是一个包装器，每次执行时都会从 GitHub 下载并运行最新的脚本
 create_management_script() {
     echo -e "${CYAN}正在创建 'snell' 管理命令...${RESET}"
-    local SCRIPT_URL="https://raw.githubusercontent.com/hsiangyu/Snell/master/snell-alpine.sh"
+    local SCRIPT_URL="https://raw.githubusercontent.com/jyucoeng/Snell/refs/heads/main/snell-alpine.sh"
     
     # 使用 cat 和 heredoc 创建脚本文件
     cat > /usr/local/bin/snell << EOF
