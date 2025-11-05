@@ -15,7 +15,7 @@ WHITE='\033[0;37m'  # 白色，用于特定文本
 RESET='\033[0m'     # 重置颜色
 
 # 脚本自身的版本号
-current_version="2.0"
+current_version="2.2"
 
 # 用于存储 Snell 的版本号 (硬编码为 v3.0.0)
 SNELL_VERSION=""
@@ -161,6 +161,26 @@ get_user_port() {
     done
 }
 
+# 提示用户输入 PSK 密钥，若不输入则随机生成
+get_user_psk() {
+    while true; do
+        printf "请输入 Snell 使用的 PSK 密钥, 或按回车随机生成: "
+        read -r PSK
+        if [ -z "$PSK" ]; then
+            PSK=$(openssl rand -base64 16)
+            echo -e "${YELLOW}已使用随机 PSK: $PSK${RESET}"
+            break
+        fi
+        # 验证 PSK 是否有效（不为空）
+        if [ -n "$PSK" ]; then
+            echo -e "${GREEN}已设置 PSK: $PSK${RESET}"
+            break
+        else
+            echo -e "${RED}PSK 密钥不能为空，请重新输入。${RESET}"
+        fi
+    done
+}
+
 # 使用 iptables 开放指定端口并设置开机自启
 open_port() {
     local port=$1
@@ -274,7 +294,7 @@ EOF
     mkdir -p "${SNELL_CONF_DIR}/users"
     mkdir -p "/var/log/snell"
     get_user_port
-    PSK=$(openssl rand -base64 16) # 随机生成 PSK 密钥
+    get_user_psk  # 获取用户自定义的 PSK 密钥
 
     # 写入主配置文件
     cat > ${SNELL_CONF_FILE} << EOF
