@@ -1,7 +1,7 @@
 #!/bin/sh
 # ================================================================
-# 作者：hsiangyu
-# 仓库：https://github.com/hsiangyu/Snell
+# 作者：myouhi
+# 仓库：https://github.com/myouhi/Snell
 # 描述: 此脚本用于在 Alpine Linux 系统上安装和管理 Snell 代理服务。
 # ================================================================
 
@@ -15,7 +15,7 @@ WHITE='\033[0;37m'  # 白色，用于特定文本
 RESET='\033[0m'     # 重置颜色
 
 # 脚本自身的版本号
-current_version="2.1"
+current_version="2.0"
 
 # 用于存储 Snell 的版本号 (硬编码为 v3.0.0)
 SNELL_VERSION=""
@@ -128,7 +128,7 @@ get_snell_version() {
 get_snell_download_url() {
     local arch=$(uname -m)
     if [ "${arch}" = "x86_64" ] || [ "${arch}" = "amd64" ]; then
-        echo "https://github.com/jyucoeng/Snell/releases/download/v3/alpine-snell-server-v3.0.0-linux-amd64.zip"
+        echo "https://github.com/myouhi/Snell/releases/download/v3/alpine-snell-server-v3.0.0-linux-amd64.zip"
     else
         echo -e "${RED}错误: 此 Snell 脚本仅支持 amd64/x86_64 架构。${RESET}"
         exit 1
@@ -161,26 +161,6 @@ get_user_port() {
     done
 }
 
-# 提示用户输入 PSK 密钥，若不输入则随机生成
-get_user_psk() {
-    while true; do
-        printf "请输入 Snell 使用的 PSK 密钥, 或按回车随机生成: "
-        read -r PSK
-        if [ -z "$PSK" ]; then
-            PSK=$(openssl rand -base64 16)
-            echo -e "${YELLOW}已使用随机 PSK: $PSK${RESET}"
-            break
-        fi
-        # 验证 PSK 是否有效（不为空）
-        if [ -n "$PSK" ]; then
-            echo -e "${GREEN}已设置 PSK: $PSK${RESET}"
-            break
-        else
-            echo -e "${RED}PSK 密钥不能为空，请重新输入。${RESET}"
-        fi
-    done
-}
-
 # 使用 iptables 开放指定端口并设置开机自启
 open_port() {
     local port=$1
@@ -195,7 +175,7 @@ open_port() {
 # 这个命令本质上是一个包装器，每次执行时都会从 GitHub 下载并运行最新的脚本
 create_management_script() {
     echo -e "${CYAN}正在创建 'snell' 管理命令...${RESET}"
-    local SCRIPT_URL="https://raw.githubusercontent.com/jyucoeng/Snell/refs/heads/main/snell-alpine.sh"
+    local SCRIPT_URL="https://raw.githubusercontent.com/myouhi/Snell/master/snell-alpine.sh"
     
     # 使用 cat 和 heredoc 创建脚本文件
     cat > /usr/local/bin/snell << EOF
@@ -294,7 +274,7 @@ EOF
     mkdir -p "${SNELL_CONF_DIR}/users"
     mkdir -p "/var/log/snell"
     get_user_port
-    get_user_psk  # 获取用户自定义的 PSK 密钥
+    PSK=$(openssl rand -base64 16) # 随机生成 PSK 密钥
 
     # 写入主配置文件
     cat > ${SNELL_CONF_FILE} << EOF
@@ -470,8 +450,8 @@ show_menu() {
     echo -e "${CYAN}============================================${RESET}"
     echo -e "${CYAN}        Snell for Alpine 管理脚本 v${current_version}${RESET}"
     echo -e "${CYAN}============================================${RESET}"
-    echo -e "${GREEN}作者：LittleDoraemon${RESET}"
-    echo -e "${GREEN}仓库：https://github.com/hsiangyu/Snell${RESET}"
+    echo -e "${GREEN}作者：myouhi${RESET}"
+    echo -e "${GREEN}仓库：https://github.com/myouhi/Snell${RESET}"
     echo -e "${CYAN}============================================${RESET}"
 
     # 检查服务状态并显示
