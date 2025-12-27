@@ -15,11 +15,8 @@ WHITE='\033[0;37m'  # 白色，用于特定文本
 RESET='\033[0m'     # 重置颜色
 
 # 脚本自身的版本号
-<<<<<<< HEAD
-current_version="2.4"
-=======
-current_version="2.3"
->>>>>>> 87c3a171371b8d7bab18fe179dd070d2a51c9eb8
+current_version="2.5"
+
 
 # 用于存储 Snell 的版本号 (硬编码为 v3.0.0)
 SNELL_VERSION=""
@@ -471,7 +468,6 @@ uninstall_snell() {
     echo -e "${GREEN}Snell 已成功卸载。${RESET}"
 }
 
-# 显示配置信息
 show_information() {
     if [ ! -f "${SNELL_CONF_FILE}" ]; then
         echo -e "${RED}未找到配置文件，请先安装 Snell。${RESET}"
@@ -516,10 +512,7 @@ show_information() {
     fi
 }
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 87c3a171371b8d7bab18fe179dd070d2a51c9eb8
 # 重启 Snell 服务
 restart_snell() {
     check_root
