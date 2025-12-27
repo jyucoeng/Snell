@@ -7,7 +7,7 @@ wget -O snell.sh --no-check-certificate https://raw.githubusercontent.com/jyucoe
 
 ## Alpine系统：
 ```
-bash <(curl -sSL https://raw.githubusercontent.com/jyucoeng/Snell/main/snell-alpine.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/jyucoeng/Snell/refs/heads/main/snell-alpine.sh)
 ```
 
 
