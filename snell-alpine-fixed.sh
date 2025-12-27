@@ -15,7 +15,7 @@ WHITE='\033[0;37m'  # 白色，用于特定文本
 RESET='\033[0m'     # 重置颜色
 
 # 脚本自身的版本号
-current_version="2.5"
+current_version="2.6"
 
 
 # 用于存储 Snell 的版本号 (硬编码为 v3.0.0)
@@ -468,25 +468,21 @@ uninstall_snell() {
     echo -e "${GREEN}Snell 已成功卸载。${RESET}"
 }
 
+
 show_information() {
     if [ ! -f "${SNELL_CONF_FILE}" ]; then
         echo -e "${RED}未找到配置文件，请先安装 Snell。${RESET}"
         return
     fi
-    
-    # 从配置文件中解析端口和 PSK
-    PORT=$(grep 'listen' ${SNELL_CONF_FILE} | sed 's/.*://')
+
+    # ⚠️ 关键修复：只取第一个 listen 的端口，避免 IPv4/IPv6 导致重复
+    PORT=$(grep 'listen' ${SNELL_CONF_FILE} | head -n 1 | sed 's/.*://')
     PSK=$(grep 'psk' ${SNELL_CONF_FILE} | sed 's/psk\s*=\s*//')
-    
-    # 获取公网 IP 地址
+
     IPV4_ADDR=$(curl -s4 --connect-timeout 5 https://api.ipify.org)
     IPV6_ADDR=$(curl -s6 --connect-timeout 5 https://api64.ipify.org)
-    
-    # 根据用户要求，移除此处的 clear 命令
-    # clear 
-    echo "" # 添加一个空行以分隔主菜单和输出信息
 
-    # 按照用户指定的格式显示信息
+    echo ""
     echo -e "${YELLOW}配置文件: ${RESET}${SNELL_CONF_FILE}"
     echo -e "${YELLOW}日志文件: ${RESET}/var/log/snell/snell.log"
     echo -e "${BLUE}============================================${RESET}"
@@ -494,19 +490,16 @@ show_information() {
     echo -e "${YELLOW}PSK 密钥:   ${RESET}${PSK}"
     echo -e "${BLUE}============================================${RESET}"
 
-    # 检查是否存在公网IP，如果存在，则显示 Surge 配置部分
     if [ -n "$IPV4_ADDR" ] || [ -n "$IPV6_ADDR" ]; then
         echo -e "${YELLOW}Surge 配置格式 (可直接复制)${RESET}"
-        
-        # 显示 IPv4 配置
+
         if [ -n "$IPV4_ADDR" ]; then
-            IP_COUNTRY_IPV4=$(curl -s --connect-timeout 5 "http://ipinfo.io/${IPV4_ADDR}/country" 2>/dev/null)
+            IP_COUNTRY_IPV4=$(curl -s "http://ipinfo.io/${IPV4_ADDR}/country")
             echo -e "${YELLOW}${IP_COUNTRY_IPV4} = snell, ${IPV4_ADDR}, ${PORT}, psk=${PSK}, version=3, reuse=true, tfo=true${RESET}"
         fi
 
-        # 显示 IPv6 配置
         if [ -n "$IPV6_ADDR" ]; then
-            IP_COUNTRY_IPV6=$(curl -s --connect-timeout 5 "https://ipapi.co/${IPV6_ADDR}/country/" 2>/dev/null)
+            IP_COUNTRY_IPV6=$(curl -s "https://ipapi.co/${IPV6_ADDR}/country/")
             echo -e "${YELLOW}${IP_COUNTRY_IPV6} = snell, ${IPV6_ADDR}, ${PORT}, psk=${PSK}, version=3, reuse=true, tfo=true${RESET}"
         fi
     fi
