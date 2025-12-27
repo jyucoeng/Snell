@@ -15,7 +15,8 @@ WHITE='\033[0;37m'  # 白色，用于特定文本
 RESET='\033[0m'     # 重置颜色
 
 # 脚本自身的版本号
-current_version="2.2"
+current_version="2.2.1(2025-12-25)"
+
 
 # 用于存储 Snell 的版本号 (硬编码为 v3.0.0)
 SNELL_VERSION=""
@@ -129,8 +130,11 @@ get_snell_download_url() {
     local arch=$(uname -m)
     if [ "${arch}" = "x86_64" ] || [ "${arch}" = "amd64" ]; then
         echo "https://github.com/jyucoeng/Snell/releases/download/v3/alpine-snell-server-v3.0.0-linux-amd64.zip"
+    elif [ "${arch}" = "aarch64" ] || [ "${arch}" = "arm64" ]; then
+        echo "https://github.com/jyucoeng/Snell/releases/download/v3/alpine-v3.0.0-linux-aarch64.zip"
+
     else
-        echo -e "${RED}错误: 此 Snell 脚本仅支持 amd64/x86_64 架构。${RESET}"
+        echo -e "${RED}错误: 此 Snell 脚本仅支持 amd64/x86_64/aarch64 架构。${RESET}"
         exit 1
     fi
 }
@@ -183,13 +187,52 @@ get_user_psk() {
 
 # 使用 iptables 开放指定端口并设置开机自启
 open_port() {
-    local port=$1
-    echo -e "${CYAN}正在配置防火墙 (iptables)...${RESET}"
-    iptables -I INPUT 1 -p tcp --dport "$port" -j ACCEPT
-    /etc/init.d/iptables save > /dev/null
-    rc-update add iptables boot > /dev/null
-    echo -e "${GREEN}防火墙端口 ${port} 已开放并设为开机自启。${RESET}"
+    local port="$1"
+
+    echo -e "${CYAN}正在配置防火墙 (IPv4 / IPv6)...${RESET}"
+
+    # ===== IPv4 =====
+    if command -v iptables >/dev/null 2>&1; then
+        # 避免重复添加规则
+        if ! iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+            iptables -I INPUT -p tcp --dport "$port" -j ACCEPT
+            echo -e "${GREEN}✓ IPv4 端口 ${port} 已放行${RESET}"
+        else
+            echo -e "${YELLOW}IPv4 端口 ${port} 已存在放行规则，跳过${RESET}"
+        fi
+
+        # 保存并设置开机自启
+        if [ -x /etc/init.d/iptables ]; then
+            /etc/init.d/iptables save >/dev/null 2>&1
+            rc-update add iptables boot >/dev/null 2>&1 || true
+        fi
+    fi
+
+    # ===== IPv6 =====
+    if command -v ip6tables >/dev/null 2>&1; then
+        # 检查系统是否禁用 IPv6
+        if sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null | grep -q '^1$'; then
+            echo -e "${YELLOW}⚠ 系统已禁用 IPv6，跳过 IPv6 防火墙配置${RESET}"
+        else
+            # 避免重复添加规则
+            if ! ip6tables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null; then
+                ip6tables -I INPUT -p tcp --dport "$port" -j ACCEPT
+                echo -e "${GREEN}✓ IPv6 端口 ${port} 已放行${RESET}"
+            else
+                echo -e "${YELLOW}IPv6 端口 ${port} 已存在放行规则，跳过${RESET}"
+            fi
+
+            # 保存并设置开机自启
+            if [ -x /etc/init.d/ip6tables ]; then
+                /etc/init.d/ip6tables save >/dev/null 2>&1
+                rc-update add ip6tables boot >/dev/null 2>&1 || true
+            fi
+        fi
+    fi
+
+    echo -e "${GREEN}防火墙配置完成（端口 ${port}）${RESET}"
 }
+
 
 # 创建一个名为 'snell' 的快捷管理命令
 # 这个命令本质上是一个包装器，每次执行时都会从 GitHub 下载并运行最新的脚本
@@ -234,9 +277,46 @@ show_manual_debug_info() {
     echo -e "${YELLOW}===================================${RESET}"
 }
 
+# 检查ipv6是否可用
+check_ipv6_available() {
+    if sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null | grep -q '^1$'; then
+        echo -e "${YELLOW}警告: 系统已禁用 IPv6，仅使用 IPv4。${RESET}"
+        IPV6_AVAILABLE=0
+    else
+        IPV6_AVAILABLE=1
+    fi
+}
+
+
+generate_snell_config() {
+    cat > "${SNELL_CONF_FILE}" << EOF
+[snell-server]
+listen = 0.0.0.0:${PORT}
+psk = ${PSK}
+tfo = true
+version-choice = v3
+EOF
+
+    if [ "$IPV6_AVAILABLE" -eq 1 ]; then
+        cat >> "${SNELL_CONF_FILE}" << EOF
+listen = [::]:${PORT}
+ipv6 = true
+EOF
+    else
+        cat >> "${SNELL_CONF_FILE}" << EOF
+ipv6 = false
+EOF
+    fi
+}
+
+
+
+
 # 主安装函数，执行安装 Snell 的所有步骤
 install_snell() {
     check_root
+    check_ipv6_available
+
     # 检查是否已安装，避免重复安装
     if [ -f "$OPENRC_SERVICE_FILE" ]; then
         echo -e "${YELLOW}Snell 已安装，如需重装请先卸载。${RESET}"
@@ -297,14 +377,7 @@ EOF
     get_user_psk  # 获取用户自定义的 PSK 密钥
 
     # 写入主配置文件
-    cat > ${SNELL_CONF_FILE} << EOF
-[snell-server]
-listen = 0.0.0.0:${PORT}
-psk = ${PSK}
-ipv6 = true
-tfo = true
-version-choice = v3
-EOF
+    generate_snell_config
 
     # 写入 OpenRC 服务文件
     cat > ${OPENRC_SERVICE_FILE} << EOF
@@ -380,9 +453,11 @@ uninstall_snell() {
     
     # 从防火墙中删除端口规则
     if [ -f "${SNELL_CONF_FILE}" ]; then
-        PORT_TO_CLOSE=$(grep 'listen' ${SNELL_CONF_FILE} | cut -d':' -f2 | tr -d ' ')
+        #只取第一个端口
+        PORT_TO_CLOSE=$(grep 'listen' ${SNELL_CONF_FILE} | head -n 1 | sed 's/.*://')
         if [ -n "$PORT_TO_CLOSE" ]; then
             iptables -D INPUT -p tcp --dport "$PORT_TO_CLOSE" -j ACCEPT 2>/dev/null
+            ip6tables -D INPUT -p tcp --dport "$PORT_TO_CLOSE" -j ACCEPT 2>/dev/null
         fi
     fi
     
@@ -393,26 +468,21 @@ uninstall_snell() {
     echo -e "${GREEN}Snell 已成功卸载。${RESET}"
 }
 
-# 显示配置信息
+
 show_information() {
     if [ ! -f "${SNELL_CONF_FILE}" ]; then
         echo -e "${RED}未找到配置文件，请先安装 Snell。${RESET}"
         return
     fi
-    
-    # 从配置文件中解析端口和 PSK
-    PORT=$(grep 'listen' ${SNELL_CONF_FILE} | sed 's/.*://')
+
+    # ⚠️ 关键修复：只取第一个 listen 的端口，避免 IPv4/IPv6 导致重复
+    PORT=$(grep 'listen' ${SNELL_CONF_FILE} | head -n 1 | sed 's/.*://')
     PSK=$(grep 'psk' ${SNELL_CONF_FILE} | sed 's/psk\s*=\s*//')
-    
-    # 获取公网 IP 地址
+
     IPV4_ADDR=$(curl -s4 --connect-timeout 5 https://api.ipify.org)
     IPV6_ADDR=$(curl -s6 --connect-timeout 5 https://api64.ipify.org)
-    
-    # 根据用户要求，移除此处的 clear 命令
-    # clear 
-    echo "" # 添加一个空行以分隔主菜单和输出信息
 
-    # 按照用户指定的格式显示信息
+    echo ""
     echo -e "${YELLOW}配置文件: ${RESET}${SNELL_CONF_FILE}"
     echo -e "${YELLOW}日志文件: ${RESET}/var/log/snell/snell.log"
     echo -e "${BLUE}============================================${RESET}"
@@ -420,23 +490,21 @@ show_information() {
     echo -e "${YELLOW}PSK 密钥:   ${RESET}${PSK}"
     echo -e "${BLUE}============================================${RESET}"
 
-    # 检查是否存在公网IP，如果存在，则显示 Surge 配置部分
     if [ -n "$IPV4_ADDR" ] || [ -n "$IPV6_ADDR" ]; then
         echo -e "${YELLOW}Surge 配置格式 (可直接复制)${RESET}"
-        
-        # 显示 IPv4 配置
+
         if [ -n "$IPV4_ADDR" ]; then
-            IP_COUNTRY_IPV4=$(curl -s --connect-timeout 5 "http://ipinfo.io/${IPV4_ADDR}/country" 2>/dev/null)
+            IP_COUNTRY_IPV4=$(curl -s "http://ipinfo.io/${IPV4_ADDR}/country")
             echo -e "${YELLOW}${IP_COUNTRY_IPV4} = snell, ${IPV4_ADDR}, ${PORT}, psk=${PSK}, version=3, reuse=true, tfo=true${RESET}"
         fi
 
-        # 显示 IPv6 配置
         if [ -n "$IPV6_ADDR" ]; then
-            IP_COUNTRY_IPV6=$(curl -s --connect-timeout 5 "https://ipapi.co/${IPV6_ADDR}/country/" 2>/dev/null)
+            IP_COUNTRY_IPV6=$(curl -s "https://ipapi.co/${IPV6_ADDR}/country/")
             echo -e "${YELLOW}${IP_COUNTRY_IPV6} = snell, ${IPV6_ADDR}, ${PORT}, psk=${PSK}, version=3, reuse=true, tfo=true${RESET}"
         fi
     fi
 }
+
 
 # 重启 Snell 服务
 restart_snell() {
@@ -463,6 +531,8 @@ check_status() {
         echo "日志文件不存在。"
     fi
 }
+
+
 
 # 主菜单
 show_menu() {
